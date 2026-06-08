@@ -1,0 +1,143 @@
+<?php
+require_once __DIR__ . '/../includes/header.php';
+
+// Start cart if it doesn't exist
+if (!isset($_SESSION['cart'])) {
+    $_SESSION['cart'] = [];
+}
+
+// ADD TO CART
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart'])) {
+    $book_id = (int)$_POST['book_id'];
+    $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 1;
+
+    $stmt = mysqli_prepare($conn, "SELECT id, title, price, discount_price, cover_image, stock FROM books WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, "i", $book_id);
+    mysqli_stmt_execute($stmt);
+    $book = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+    if ($book) {
+        if (isset($_SESSION['cart'][$book_id])) {
+            $_SESSION['cart'][$book_id]['quantity'] += $quantity;
+        } else {
+            $_SESSION['cart'][$book_id] = [
+                'id'           => $book['id'],
+                'title'        => $book['title'],
+                'price'        => $book['price'],
+                'cover_image'  => $book['cover_image'],
+                'quantity'     => $quantity
+            ];
+        }
+
+        // If AJAX request, return JSON response
+        if (isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+            $count = array_sum(array_column($_SESSION['cart'], 'quantity'));
+            echo json_encode(['success' => true, 'cart_count' => $count]);
+            exit;
+        }
+
+        header('Location: ' . $_SERVER['HTTP_REFERER']);
+        exit;
+    }
+}
+
+// REMOVE FROM CART
+if (isset($_GET['remove'])) {
+    unset($_SESSION['cart'][(int)$_GET['remove']]);
+    header('Location: cart.php');
+    exit;
+}
+
+// UPDATE QUANTITY
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_cart'])) {
+    $book_id = (int)$_POST['book_id'];
+    $quantity = (int)$_POST['quantity'];
+    if (isset($_SESSION['cart'][$book_id]) && $quantity > 0) {
+        $_SESSION['cart'][$book_id]['quantity'] = $quantity;
+    }
+    header('Location: cart.php');
+    exit;
+}
+
+// Calculate totals
+$subtotal = 0;
+foreach ($_SESSION['cart'] as $item) {
+    $subtotal += $item['price'] * $item['quantity'];
+}
+$shipping = $subtotal > 0 ? 50 : 0;
+$total = $subtotal + $shipping;
+?>
+
+<section class="cart-page">
+    <div class="container">
+        <h1 class="section-title" style="text-align: left; margin-bottom: 30px;">
+            <i class="fas fa-shopping-cart"></i> Your Shopping Cart
+        </h1>
+
+        <?php if (!empty($_SESSION['cart'])): ?>
+            <table class="cart-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th>Quantity</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($_SESSION['cart'] as $item): ?>
+                        <?php $item_total = $item['price'] * $item['quantity']; ?>
+                        <tr>
+                            <td data-label="Product">
+                                <div class="cart-product">
+                                    <img src="<?php echo $item['cover_image'] ? '../uploads/book-covers/' . $item['cover_image'] : '../assets/images/book-placeholder.jpg'; ?>"
+                                         alt="<?php echo htmlspecialchars($item['title']); ?>"
+                                         onerror="this.src='../assets/images/book-placeholder.jpg'">
+                                    <div class="cart-product-info">
+                                        <h4><?php echo htmlspecialchars($item['title']); ?></h4>
+                                    </div>
+                                </div>
+                            </td>
+                            <td data-label="Price"><?php echo CURRENCY; ?> <?php echo number_format($item['price'], 2); ?></td>
+                            <td data-label="Quantity">
+                                <form method="POST" action="cart.php" class="cart-qty">
+                                    <input type="hidden" name="update_cart" value="1">
+                                    <input type="hidden" name="book_id" value="<?php echo $item['id']; ?>">
+                                    <button type="submit" name="quantity" value="<?php echo max(1, $item['quantity'] - 1); ?>">-</button>
+                                    <span><?php echo $item['quantity']; ?></span>
+                                    <button type="submit" name="quantity" value="<?php echo $item['quantity'] + 1; ?>">+</button>
+                                </form>
+                            </td>
+                            <td data-label="Total"><strong><?php echo CURRENCY; ?> <?php echo number_format($item_total, 2); ?></strong></td>
+                            <td>
+                                <a href="cart.php?remove=<?php echo $item['id']; ?>" class="remove-btn" onclick="return confirm('Remove this item?')">
+                                    <i class="fas fa-trash-alt"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+
+            <div class="cart-summary">
+                <h3>Cart Summary</h3>
+                <div class="summary-row"><span>Subtotal</span><span><?php echo CURRENCY; ?> <?php echo number_format($subtotal, 2); ?></span></div>
+                <div class="summary-row"><span>Shipping</span><span><?php echo $shipping > 0 ? CURRENCY . ' ' . number_format($shipping, 2) : 'Free'; ?></span></div>
+                <div class="summary-row total"><span>Total</span><span><?php echo CURRENCY; ?> <?php echo number_format($total, 2); ?></span></div>
+                <a href="checkout.php" class="btn btn-primary" style="width: 100%; margin-top: 15px;"><i class="fas fa-credit-card"></i> Proceed to Checkout</a>
+                <a href="shop.php" class="btn btn-outline" style="width: 100%; margin-top: 10px;"><i class="fas fa-arrow-left"></i> Continue Shopping</a>
+            </div>
+
+        <?php else: ?>
+            <div class="empty-state">
+                <i class="fas fa-shopping-cart"></i>
+                <h3>Your cart is empty</h3>
+                <p>You haven't added any books yet. Start shopping!</p>
+                <a href="shop.php" class="btn btn-primary btn-lg" style="margin-top: 20px;"><i class="fas fa-book-open"></i> Browse Books</a>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<?php require_once __DIR__ . '/../includes/footer.php'; ?>
