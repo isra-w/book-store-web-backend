@@ -1,9 +1,12 @@
 <?php
+// Admin users page: requires valid admin session and loads registered user data.
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: login.php'); exit; }
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/functions.php';
 
+// Fetch all users, ordered by registration date.
 $users = mysqli_query($conn, "SELECT * FROM users ORDER BY created_at DESC");
 $page_title = 'Registered Users';
 ?>
@@ -16,7 +19,6 @@ $page_title = 'Registered Users';
     <?php include 'sidebar.php'; ?>
 </head>
 <body>
-
         <div class="admin-section">
             <div class="admin-section-header">
                 <h2>All Users (<?php echo mysqli_num_rows($users); ?>)</h2>
@@ -31,10 +33,10 @@ $page_title = 'Registered Users';
                             <?php while ($user = mysqli_fetch_assoc($users)): ?>
                                 <tr>
                                     <td>#<?php echo $user['id']; ?></td>
-                                    <td style="font-weight: 500;"><i class="fas fa-user" style="color: var(--admin-primary); margin-right: 8px;"></i><?php echo htmlspecialchars($user['username']); ?></td>
-                                    <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                    <td><?php echo htmlspecialchars($user['full_name'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></td>
+                                    <td style="font-weight: 500;"><i class="fas fa-user" style="color: var(--admin-primary); margin-right: 8px;"></i><?= escape($user['username']) ?></td>
+                                    <td><?= escape($user['email']) ?></td>
+                                    <td><?= escape($user['full_name'] ?? 'N/A') ?></td>
+                                    <td><?= escape($user['phone'] ?? 'N/A') ?></td>
                                     <td><?php echo date('M j, Y', strtotime($user['created_at'])); ?></td>
                                 </tr>
                             <?php endwhile; ?>
